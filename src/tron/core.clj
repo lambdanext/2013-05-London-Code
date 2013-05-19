@@ -8,9 +8,13 @@
 (def sleep-length "time in ms between turns" 200)
 
 (def arena
-  (vec
-    (map vec (partition size
-               (repeatedly (* size size) #(ref nil))))))
+  (mapv vec (partition size
+              (repeatedly (* size size) #(ref nil)))))
+
+(defn blank-arena []
+  (dosync
+    (doseq [row arena r row]
+      (ref-set r nil))))
 
 (defn setup []
   (q/color-mode :hsb)
@@ -120,10 +124,8 @@
               (recur state'))
             (println name "died")))))))
 
-(defn buzz 
-  "To the infinity and beyond!"
-  [look {[x y] :pos}]
-  {:pos [(inc x) y]})
+(defn spawn-biker [strategy]
+  (future (client (name (gensym "Bot")) strategy)))
 
 ;;;; Launch them all!!
 
@@ -131,5 +133,4 @@
 
 #_(def bots (doall (for [[n s] {"Bot1" buzz "Bot2" buzz}]
                        (future (client n s)))))
-
 
