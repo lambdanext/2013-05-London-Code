@@ -1,5 +1,7 @@
 (ns tron.core
-  (:require [quil.core :as q]))
+  (:require 
+    [quil.core :as q]
+    [clojure.edn :as edn]))
 
 (def size "size of the square arena" 30)
 (def scale 20)
@@ -38,30 +40,85 @@
 (defn valid-move? [from to]
   (contains? legal-moves (map - to from)))
 
-(defn biker [arena strategy]
-  (let [look (fn [pos] @(get-in arena pos))] 
-    (fn self [{:keys [state hue] :as agt-state}]
-	    (dosync
-	      (let [state' (strategy look state)
-              pos' (:pos state')
-              moved (when (and (valid-move? (:pos state) pos')
-                            (valid-pos? pos')
-                            (nil? @(get-in arena pos')))
-                      (ref-set (get-in arena  (:pos state')) hue))]
-         (if moved
-	        (do
-	          (Thread/sleep sleep-length)
-	          (send-off *agent* self)
-	          (assoc agt-state :state state'))
-	        (do 
-	          (println "arghhh" hue)
-	          (assoc agt-state :dead true))))))))
+(defmacro my-with-open [bindings & body]
+  (if-let [[name expr & more-bindings] (seq bindings)]
+    (let [close (:close-with (meta expr) '.close)]
+      `(let [~name ~expr]
+         (try
+           (my-with-open ~more-bindings ~@body)
+           (finally
+             (-> ~name ~close)))))
+    `(do ~@body)))
 
-(defn spawn-biker [strategy]
-  (send-off (agent {:state {:pos [(rand-int size)
-                                  (rand-int size)]}
-                    :hue (rand-int 255)})
-    (biker arena strategy)))
+(defmulti process-req :method)
+
+(def clients
+  (atom {}))
+
+(def ids (atom 0))
+
+(defmethod process-req :register [{:keys [name]}]
+  (let [hue (rand-int 255)
+        id (swap! ids inc) 
+        pos [(rand-int size) (rand-int size)]]
+    (swap! clients assoc id 
+      {:hue hue :pos (ref pos) :id id :name name})
+    (dosync (ref-set (get-in arena pos) hue))
+    {:hue hue :pos pos :id id}))
+
+(defmethod process-req :move [{:keys [id pos]}]
+  (let [{hue :hue rpos :pos} (@clients id)]
+    (if (valid-pos? pos)
+      (let [cell (get-in arena  pos)
+            moved (dosync 
+                    (when (and (valid-move? @rpos pos) (nil? @cell))
+                      (ref-set cell hue)
+                      (ref-set rpos pos)
+                      true))]
+        {:status (if moved :ok :ko)})
+      {:status :ko})))
+
+(defmethod process-req :look [_]
+  (mapv #(mapv deref %) arena))
+
+(defn send-msg [^org.jeromq.ZMQ$Socket socket msg]
+  (.send socket (.getBytes (pr-str msg) "UTF-8")))
+
+(defn recv-msg [^org.jeromq.ZMQ$Socket socket]
+  (edn/read-string (String. (.recv socket 0) "UTF-8")))
+
+(defn reply [socket f]
+  (->> (recv-msg socket) f (send-msg socket)))
+
+(defn server []
+  (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
+                 socket (doto (.socket context org.jeromq.ZMQ/REP)
+                          (.bind "tcp://*:5555"))]
+    (while (not (.isInterrupted (Thread/currentThread)))
+      (reply socket process-req))))
+
+(defn request [socket msg]
+  (send-msg socket msg)
+  (recv-msg socket))
+
+(defn client [name strategy]
+  (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
+                 socket (doto (.socket context org.jeromq.ZMQ/REQ)
+                          (.connect "tcp://localhost:5555"))]
+    (let [{:keys [hue id pos]} (request socket {:method :register
+                                                :name name})]
+      (loop [state {:pos pos}]
+        (let [arena (request socket {:method :look})
+              state' (strategy arena state)
+              pos' (:pos state')
+              {:keys [status]} (request socket {:method :move
+                                                :id id
+                                                :pos pos'})]
+          (if (= :ok status)
+            (do
+              (Thread/sleep sleep-length)
+              (recur state'))
+            (println name "died")))))))
 
 (defn buzz 
   "To the infinity and beyond!"
@@ -70,6 +127,9 @@
 
 ;;;; Launch them all!!
 
-#_(doseq [s [buzz buzz]]
-    (spawn-biker s))
+#_(def srv (future (server)))
+
+#_(def bots (doall (for [[n s] {"Bot1" buzz "Bot2" buzz}]
+                       (future (client n s)))))
+
 
