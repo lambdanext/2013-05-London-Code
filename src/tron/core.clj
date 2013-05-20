@@ -94,12 +94,24 @@
 (defn reply [socket f]
   (->> (recv-msg socket) f (send-msg socket)))
 
-(defn server []
+(defn server
+  "Dispatches to workers" 
+  []
   (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
+                 router (doto (.socket context org.jeromq.ZMQ/ROUTER)
+                          (.bind "tcp://*:5555"))
+                 dealer (doto (.socket context org.jeromq.ZMQ/DEALER)
+                          (.bind "tcp://*:5556"))]
+    (.run (org.jeromq.ZMQQueue. context router dealer))))
+
+(defn worker 
+  ([] (worker "localhost"))
+  ([name]
+    (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
                  socket (doto (.socket context org.jeromq.ZMQ/REP)
-                          (.bind "tcp://*:5555"))]
-    (while (not (.isInterrupted (Thread/currentThread)))
-      (reply socket process-req))))
+                          (.connect (str "tcp://" name ":5556")))]
+      (while (not (.isInterrupted (Thread/currentThread)))
+        (reply socket process-req)))))
 
 (defn request [socket msg]
   (send-msg socket msg)
