@@ -125,6 +125,7 @@
                                                 :name name})]
       (loop [state {:pos pos}]
         (let [arena (request socket {:method :look})
+              look (fn [pos] (get-in arena pos))
               state' (strategy arena state)
               pos' (:pos state')
               {:keys [status]} (request socket {:method :move
@@ -143,6 +144,5 @@
 
 #_(def srv (future (server)))
 
-#_(def bots (doall (for [[n s] {"Bot1" buzz "Bot2" buzz}]
-                       (future (client n s)))))
+#_(def workers (vec (take 2 (repeatedly #(future (worker))))))
 
