@@ -30,12 +30,6 @@
         (q/fill (q/color hue 255 255))
         (q/rect (* scale x) (* scale y) scale scale)))))
 
-(q/defsketch tron
-  :title "TRON"
-  :setup setup
-  :draw draw
-  :size [(* scale size) (* scale size)])
-
 (defn valid-pos? [[i j]]
   (and (< -1 i size) (< -1 j size)))
 
@@ -95,8 +89,13 @@
   (->> (recv-msg socket) f (send-msg socket)))
 
 (defn server
-  "Dispatches to workers" 
+  "Starts the UI and dispatches to (local) workers" 
   []
+  (q/defsketch tron
+  :title "TRON"
+  :setup setup
+  :draw draw
+  :size [(* scale size) (* scale size)])
   (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
                  router (doto (.socket context org.jeromq.ZMQ/ROUTER)
                           (.bind "tcp://*:5555"))
@@ -104,14 +103,12 @@
                           (.bind "tcp://*:5556"))]
     (.run (org.jeromq.ZMQQueue. context router dealer))))
 
-(defn worker 
-  ([] (worker "localhost"))
-  ([name]
-    (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
-                 socket (doto (.socket context org.jeromq.ZMQ/REP)
-                          (.connect (str "tcp://" name ":5556")))]
-      (while (not (.isInterrupted (Thread/currentThread)))
-        (reply socket process-req)))))
+(defn worker []
+  (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
+               socket (doto (.socket context org.jeromq.ZMQ/REP)
+                        (.connect "tcp://localhost:5556"))]
+    (while (not (.isInterrupted (Thread/currentThread)))
+      (reply socket process-req))))
 
 (defn request [socket msg]
   (send-msg socket msg)
@@ -126,7 +123,7 @@
       (loop [state {:pos pos}]
         (let [arena (request socket {:method :look})
               look (fn [pos] (get-in arena pos))
-              state' (strategy arena state)
+              state' (strategy look state)
               pos' (:pos state')
               {:keys [status]} (request socket {:method :move
                                                 :id id
