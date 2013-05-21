@@ -117,10 +117,10 @@
   (send-msg socket msg)
   (recv-msg socket))
 
-(defn client [name strategy]
+(defn client [addr name strategy]
   (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
                  socket (doto (.socket context org.jeromq.ZMQ/REQ)
-                          (.connect "tcp://localhost:5555"))]
+                          (.connect addr))]
     (let [{:keys [hue id pos]} (request socket {:method :register
                                                 :name name})]
       (loop [state {:pos pos}]
@@ -137,8 +137,11 @@
               (recur state'))
             (println name "died")))))))
 
-(defn spawn-biker [strategy]
-  (future (client (name (gensym "Bot")) strategy)))
+(defn spawn-biker 
+  ([strategy]
+    (spawn-biker "tcp://localhost:5555" strategy))
+  ([addr strategy]
+    (future (client addr (name (gensym "Bot")) strategy))))
 
 ;;;; Launch them all!!
 

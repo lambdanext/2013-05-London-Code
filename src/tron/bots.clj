@@ -6,7 +6,6 @@
   [look {[x y] :pos}]
   {:pos [(inc x) y]})
 
-
 ;; launch two buzzes
 #_(doseq [s [buzz buzz]]
-  (tron/spawn-biker s))
+  (tron/spawn-biker "tcp://172.16.25.93:5555" s))
