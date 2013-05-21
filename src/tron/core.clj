@@ -122,7 +122,7 @@
                                                 :name name})]
       (loop [state {:pos pos}]
         (let [arena (request socket {:method :look})
-              look (fn [pos] (get-in arena pos))
+              look (fn [pos] (get-in arena pos :wall))
               state' (strategy look state)
               pos' (:pos state')
               {:keys [status]} (request socket {:method :move
