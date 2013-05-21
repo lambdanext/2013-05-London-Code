@@ -79,10 +79,10 @@
 (defmethod process-req :look [_]
   (mapv #(mapv deref %) arena))
 
-(defn send-msg [^org.jeromq.ZMQ$Socket socket msg]
+(defn send-msg [^org.zeromq.ZMQ$Socket socket msg]
   (.send socket (.getBytes (pr-str msg) "UTF-8")))
 
-(defn recv-msg [^org.jeromq.ZMQ$Socket socket]
+(defn recv-msg [^org.zeromq.ZMQ$Socket socket]
   (edn/read-string (String. (.recv socket 0) "UTF-8")))
 
 (defn reply [socket f]
@@ -96,16 +96,16 @@
   :setup setup
   :draw draw
   :size [(* scale size) (* scale size)])
-  (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
-                 router (doto (.socket context org.jeromq.ZMQ/ROUTER)
+  (my-with-open [context ^{:close-with .term} (org.zeromq.ZMQ/context 1)
+                 router (doto (.socket context org.zeromq.ZMQ/ROUTER)
                           (.bind "tcp://*:5555"))
-                 dealer (doto (.socket context org.jeromq.ZMQ/DEALER)
+                 dealer (doto (.socket context org.zeromq.ZMQ/DEALER)
                           (.bind "tcp://*:5556"))]
-    (.run (org.jeromq.ZMQQueue. context router dealer))))
+    (.run (org.zeromq.ZMQQueue. context router dealer))))
 
 (defn worker []
-  (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
-               socket (doto (.socket context org.jeromq.ZMQ/REP)
+  (my-with-open [context ^{:close-with .term} (org.zeromq.ZMQ/context 1)
+               socket (doto (.socket context org.zeromq.ZMQ/REP)
                         (.connect "tcp://localhost:5556"))]
     (while (not (.isInterrupted (Thread/currentThread)))
       (reply socket process-req))))
@@ -115,8 +115,8 @@
   (recv-msg socket))
 
 (defn client [addr name strategy]
-  (my-with-open [context ^{:close-with .term} (org.jeromq.ZMQ/context 1)
-                 socket (doto (.socket context org.jeromq.ZMQ/REQ)
+  (my-with-open [context ^{:close-with .term} (org.zeromq.ZMQ/context 1)
+                 socket (doto (.socket context org.zeromq.ZMQ/REQ)
                           (.connect addr))]
     (let [{:keys [hue id pos]} (request socket {:method :register
                                                 :name name})]
@@ -142,7 +142,8 @@
 
 ;;;; Launch them all!!
 
-#_(def srv (future (server)))
+#_(do
+    (def srv (future (server)))
+    (def workers (vec (take 2 (repeatedly #(future (worker)))))))
 
-#_(def workers (vec (take 2 (repeatedly #(future (worker))))))
 
