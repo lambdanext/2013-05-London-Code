@@ -3,8 +3,8 @@
     [quil.core :as q]
     [clojure.edn :as edn]))
 
-(def size "size of the square arena" 30)
-(def scale 20)
+(def size "size of the square arena" 60)
+(def scale 10)
 (def sleep-length "time in ms between turns" 200)
 
 (def arena
