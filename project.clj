@@ -6,4 +6,6 @@
   :repositories [["snap" "http://repo.typesafe.com/typesafe/repo/"]]
   :dependencies [[org.clojure/clojure "1.5.1"]
                  [quil "1.6.0"]
-                 [org.jeromq/jeromq "0.3.0-SNAPSHOT"]])
+                 [org.jeromq/jeromq "0.3.0-SNAPSHOT"]
+                 ;; uncomment next form if java <= 6
+                 #_[org.codehaus.jsr166-mirror/jsr166y "1.7.0"]])
